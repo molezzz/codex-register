@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账号管理 - OpenAI 注册系统</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>OpenAI 注册系统</h1>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">注册</a>
+                <a href="/accounts" class="nav-link active">账号管理</a>
+                <a href="/settings" class="nav-link">设置</a>
+            </div>
+        </nav>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <div class="page-header">
+                <h2>账号管理</h2>
+                <p class="subtitle">查看和管理已注册的 OpenAI 账号</p>
+            </div>
+
+            <!-- 统计卡片 -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="total-accounts">0</div>
+                    <div class="stat-label">总账号数</div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-value" id="active-accounts">0</div>
+                    <div class="stat-label">活跃账号</div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-value" id="expired-accounts">0</div>
+                    <div class="stat-label">过期账号</div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-value" id="failed-accounts">0</div>
+                    <div class="stat-label">失败账号</div>
+                </div>
+            </div>
+
+            <!-- 工具栏 -->
+            <div class="card">
+                <div class="card-body toolbar">
+                    <div class="toolbar-left">
+                        <select id="filter-status" class="form-select">
+                            <option value="">全部状态</option>
+                            <option value="active">活跃</option>
+                            <option value="expired">过期</option>
+                            <option value="banned">封禁</option>
+                            <option value="failed">失败</option>
+                        </select>
+
+                        <select id="filter-service" class="form-select">
+                            <option value="">全部邮箱服务</option>
+                            <option value="tempmail">Tempmail</option>
+                            <option value="outlook">Outlook</option>
+                            <option value="custom_domain">自定义域名</option>
+                        </select>
+
+                        <input type="text" id="search-input" class="form-input" placeholder="搜索邮箱...">
+                    </div>
+
+                    <div class="toolbar-right">
+                        <button class="btn btn-secondary" id="refresh-btn">刷新</button>
+                        <button class="btn btn-danger" id="batch-delete-btn" disabled>批量删除</button>
+                        <div class="dropdown">
+                            <button class="btn btn-primary dropdown-toggle" id="export-btn">
+                                导出
+                            </button>
+                            <div class="dropdown-menu" id="export-menu">
+                                <a href="#" class="dropdown-item" data-format="json">导出 JSON</a>
+                                <a href="#" class="dropdown-item" data-format="csv">导出 CSV</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 账号列表 -->
+            <div class="card">
+                <div class="card-body">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="select-all"></th>
+                                <th>ID</th>
+                                <th>邮箱</th>
+                                <th>邮箱服务</th>
+                                <th>状态</th>
+                                <th>注册时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="accounts-table">
+                            <!-- 动态加载 -->
+                        </tbody>
+                    </table>
+
+                    <!-- 分页 -->
+                    <div class="pagination" id="pagination">
+                        <button class="btn btn-sm" id="prev-page" disabled>上一页</button>
+                        <span id="page-info">第 1 页</span>
+                        <button class="btn btn-sm" id="next-page">下一页</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 详情模态框 -->
+    <div class="modal" id="detail-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>账号详情</h3>
+                <button class="modal-close" id="close-modal">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- 动态加载 -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/accounts.js"></script>
+</body>
+</html>
