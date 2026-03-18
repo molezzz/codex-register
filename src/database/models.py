@@ -144,6 +144,20 @@ class CpaService(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class Sub2ApiService(Base):
+    """Sub2API 服务配置表"""
+    __tablename__ = 'sub2api_services'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)  # 服务名称
+    api_url = Column(String(500), nullable=False)  # API URL (host)
+    api_key = Column(Text, nullable=False)  # x-api-key
+    enabled = Column(Boolean, default=True)
+    priority = Column(Integer, default=0)  # 优先级
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Proxy(Base):
     """代理列表表"""
     __tablename__ = 'proxies'

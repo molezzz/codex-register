@@ -48,6 +48,15 @@ const elements = {
     cpaServiceForm: document.getElementById('cpa-service-form'),
     cpaServiceModalTitle: document.getElementById('cpa-service-modal-title'),
     testCpaServiceBtn: document.getElementById('test-cpa-service-btn'),
+    // Sub2API 服务管理
+    addSub2ApiServiceBtn: document.getElementById('add-sub2api-service-btn'),
+    sub2ApiServicesTable: document.getElementById('sub2api-services-table'),
+    sub2ApiServiceEditModal: document.getElementById('sub2api-service-edit-modal'),
+    closeSub2ApiServiceModal: document.getElementById('close-sub2api-service-modal'),
+    cancelSub2ApiServiceBtn: document.getElementById('cancel-sub2api-service-btn'),
+    sub2ApiServiceForm: document.getElementById('sub2api-service-form'),
+    sub2ApiServiceModalTitle: document.getElementById('sub2api-service-modal-title'),
+    testSub2ApiServiceBtn: document.getElementById('test-sub2api-service-btn'),
     // Team Manager 设置
     tmForm: document.getElementById('tm-form'),
     testTmBtn: document.getElementById('test-tm-btn'),
@@ -70,6 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadDatabaseInfo();
     loadProxies();
     loadCpaServices();
+    loadSub2ApiServices();
     initEventListeners();
 });
 
@@ -254,6 +264,28 @@ function initEventListeners() {
     }
     if (elements.testCpaServiceBtn) {
         elements.testCpaServiceBtn.addEventListener('click', handleTestCpaService);
+    }
+
+    // Sub2API 服务管理
+    if (elements.addSub2ApiServiceBtn) {
+        elements.addSub2ApiServiceBtn.addEventListener('click', () => openSub2ApiServiceModal());
+    }
+    if (elements.closeSub2ApiServiceModal) {
+        elements.closeSub2ApiServiceModal.addEventListener('click', closeSub2ApiServiceModal);
+    }
+    if (elements.cancelSub2ApiServiceBtn) {
+        elements.cancelSub2ApiServiceBtn.addEventListener('click', closeSub2ApiServiceModal);
+    }
+    if (elements.sub2ApiServiceEditModal) {
+        elements.sub2ApiServiceEditModal.addEventListener('click', (e) => {
+            if (e.target === elements.sub2ApiServiceEditModal) closeSub2ApiServiceModal();
+        });
+    }
+    if (elements.sub2ApiServiceForm) {
+        elements.sub2ApiServiceForm.addEventListener('submit', handleSaveSub2ApiService);
+    }
+    if (elements.testSub2ApiServiceBtn) {
+        elements.testSub2ApiServiceBtn.addEventListener('click', handleTestSub2ApiService);
     }
 }
 
@@ -1227,6 +1259,154 @@ async function handleTestCpaService() {
     } finally {
         elements.testCpaServiceBtn.disabled = false;
         elements.testCpaServiceBtn.textContent = '🔌 测试连接';
+    }
+}
+
+// ============================================================================
+// Sub2API 服务管理
+// ============================================================================
+
+let _sub2apiEditingId = null;
+
+async function loadSub2ApiServices() {
+    try {
+        const services = await api.get('/sub2api-services');
+        renderSub2ApiServices(services);
+    } catch (e) {
+        if (elements.sub2ApiServicesTable) {
+            elements.sub2ApiServicesTable.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">加载失败</td></tr>';
+        }
+    }
+}
+
+function renderSub2ApiServices(services) {
+    if (!elements.sub2ApiServicesTable) return;
+    if (!services || services.length === 0) {
+        elements.sub2ApiServicesTable.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">暂无服务，点击"添加服务"按钮添加</td></tr>';
+        return;
+    }
+    elements.sub2ApiServicesTable.innerHTML = services.map(s => `
+        <tr>
+            <td>${escapeHtml(s.name)}</td>
+            <td><code>${escapeHtml(s.api_url)}</code></td>
+            <td><span class="status-badge ${s.enabled ? 'active' : 'disabled'}">${s.enabled ? '已启用' : '已禁用'}</span></td>
+            <td>${s.priority}</td>
+            <td>
+                <div class="action-buttons">
+                    <button class="btn btn-ghost btn-sm" onclick="editSub2ApiService(${s.id})" title="编辑">✏️</button>
+                    <button class="btn btn-ghost btn-sm" onclick="deleteSub2ApiService(${s.id}, '${escapeHtml(s.name)}')" title="删除">🗑️</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function openSub2ApiServiceModal(svc = null) {
+    _sub2apiEditingId = svc ? svc.id : null;
+    elements.sub2ApiServiceModalTitle.textContent = svc ? '编辑 Sub2API 服务' : '添加 Sub2API 服务';
+    elements.sub2ApiServiceForm.reset();
+    document.getElementById('sub2api-service-id').value = svc ? svc.id : '';
+    if (svc) {
+        document.getElementById('sub2api-service-name').value = svc.name || '';
+        document.getElementById('sub2api-service-url').value = svc.api_url || '';
+        document.getElementById('sub2api-service-priority').value = svc.priority ?? 0;
+        document.getElementById('sub2api-service-enabled').checked = svc.enabled !== false;
+        document.getElementById('sub2api-service-key').placeholder = svc.has_key ? '已配置，留空保持不变' : '请输入 API Key';
+    }
+    elements.sub2ApiServiceEditModal.classList.add('active');
+}
+
+function closeSub2ApiServiceModal() {
+    elements.sub2ApiServiceEditModal.classList.remove('active');
+    elements.sub2ApiServiceForm.reset();
+    _sub2apiEditingId = null;
+}
+
+async function editSub2ApiService(id) {
+    try {
+        const svc = await api.get(`/sub2api-services/${id}`);
+        openSub2ApiServiceModal(svc);
+    } catch (e) {
+        toast.error('加载失败: ' + e.message);
+    }
+}
+
+async function deleteSub2ApiService(id, name) {
+    if (!confirm(`确认删除 Sub2API 服务「${name}」？`)) return;
+    try {
+        await api.delete(`/sub2api-services/${id}`);
+        toast.success('服务已删除');
+        loadSub2ApiServices();
+    } catch (e) {
+        toast.error('删除失败: ' + e.message);
+    }
+}
+
+async function handleSaveSub2ApiService(e) {
+    e.preventDefault();
+    const id = document.getElementById('sub2api-service-id').value;
+    const data = {
+        name: document.getElementById('sub2api-service-name').value,
+        api_url: document.getElementById('sub2api-service-url').value,
+        api_key: document.getElementById('sub2api-service-key').value || undefined,
+        priority: parseInt(document.getElementById('sub2api-service-priority').value) || 0,
+        enabled: document.getElementById('sub2api-service-enabled').checked,
+    };
+    if (!id && !data.api_key) {
+        toast.error('请填写 API Key');
+        return;
+    }
+    if (!data.api_key) delete data.api_key;
+
+    try {
+        if (id) {
+            await api.patch(`/sub2api-services/${id}`, data);
+            toast.success('服务已更新');
+        } else {
+            await api.post('/sub2api-services', data);
+            toast.success('服务已添加');
+        }
+        closeSub2ApiServiceModal();
+        loadSub2ApiServices();
+    } catch (e) {
+        toast.error('保存失败: ' + e.message);
+    }
+}
+
+async function handleTestSub2ApiService() {
+    const apiUrl = document.getElementById('sub2api-service-url').value.trim();
+    const apiKey = document.getElementById('sub2api-service-key').value.trim();
+    const id = document.getElementById('sub2api-service-id').value;
+
+    if (!apiUrl) {
+        toast.error('请先填写 API URL');
+        return;
+    }
+    if (!id && !apiKey) {
+        toast.error('请先填写 API Key');
+        return;
+    }
+
+    elements.testSub2ApiServiceBtn.disabled = true;
+    elements.testSub2ApiServiceBtn.textContent = '测试中...';
+
+    try {
+        let result;
+        if (id && !apiKey) {
+            result = await api.post(`/sub2api-services/${id}/test`);
+        } else {
+            result = await api.post('/sub2api-services/test-connection', { api_url: apiUrl, api_key: apiKey });
+        }
+        if (result.success) {
+            toast.success(result.message);
+        } else {
+            toast.error(result.message);
+        }
+    } catch (e) {
+        toast.error('测试失败: ' + e.message);
+    } finally {
+        elements.testSub2ApiServiceBtn.disabled = false;
+        elements.testSub2ApiServiceBtn.textContent = '🔌 测试连接';
     }
 }
 

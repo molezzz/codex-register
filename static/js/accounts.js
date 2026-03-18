@@ -26,6 +26,7 @@ const elements = {
     batchRefreshBtn: document.getElementById('batch-refresh-btn'),
     batchValidateBtn: document.getElementById('batch-validate-btn'),
     batchUploadCpaBtn: document.getElementById('batch-upload-cpa-btn'),
+    batchUploadSub2ApiBtn: document.getElementById('batch-upload-sub2api-btn'),
     batchCheckSubBtn: document.getElementById('batch-check-sub-btn'),
     batchUploadTmBtn: document.getElementById('batch-upload-tm-btn'),
     batchDeleteBtn: document.getElementById('batch-delete-btn'),
@@ -99,6 +100,9 @@ function initEventListeners() {
 
     // 批量检测订阅
     elements.batchCheckSubBtn.addEventListener('click', handleBatchCheckSubscription);
+
+    // 批量上传Sub2API
+    elements.batchUploadSub2ApiBtn.addEventListener('click', handleBatchUploadSub2Api);
 
     // 批量上传TM
     elements.batchUploadTmBtn.addEventListener('click', handleBatchUploadTm);
@@ -466,6 +470,7 @@ function updateBatchButtons() {
     elements.batchRefreshBtn.disabled = count === 0;
     elements.batchValidateBtn.disabled = count === 0;
     elements.batchUploadCpaBtn.disabled = count === 0;
+    elements.batchUploadSub2ApiBtn.disabled = count === 0;
     elements.batchCheckSubBtn.disabled = count === 0;
     elements.batchUploadTmBtn.disabled = count === 0;
     elements.exportBtn.disabled = count === 0;
@@ -474,6 +479,7 @@ function updateBatchButtons() {
     elements.batchRefreshBtn.textContent = count > 0 ? `🔄 刷新 (${count})` : '🔄 刷新Token';
     elements.batchValidateBtn.textContent = count > 0 ? `✅ 验证 (${count})` : '✅ 验证Token';
     elements.batchUploadCpaBtn.textContent = count > 0 ? `☁️ 上传 (${count})` : '☁️ 上传CPA';
+    elements.batchUploadSub2ApiBtn.textContent = count > 0 ? `🔗 Sub2API (${count})` : '🔗 上传Sub2API';
     elements.batchCheckSubBtn.textContent = count > 0 ? `🔍 检测 (${count})` : '🔍 检测订阅';
     elements.batchUploadTmBtn.textContent = count > 0 ? `🚀 上传TM (${count})` : '🚀 上传TM';
 }
@@ -903,6 +909,107 @@ async function handleBatchCheckSubscription() {
         loadAccounts();
     } catch (e) {
         toast.error('批量检测失败: ' + e.message);
+    } finally {
+        updateBatchButtons();
+    }
+}
+
+// ============== Sub2API 上传 ==============
+
+// 弹出 Sub2API 服务选择框，返回 Promise<{service_id: number|null}|null>
+// null 表示用户取消，{service_id: null} 表示自动选择
+function selectSub2ApiService() {
+    return new Promise(async (resolve) => {
+        const modal = document.getElementById('sub2api-service-modal');
+        const listEl = document.getElementById('sub2api-service-list');
+        const closeBtn = document.getElementById('close-sub2api-modal');
+        const cancelBtn = document.getElementById('cancel-sub2api-modal-btn');
+        const autoBtn = document.getElementById('sub2api-use-auto-btn');
+
+        listEl.innerHTML = '<div style="text-align:center;color:var(--text-muted)">加载中...</div>';
+        modal.classList.add('active');
+
+        let services = [];
+        try {
+            services = await api.get('/sub2api-services?enabled=true');
+        } catch (e) {
+            services = [];
+        }
+
+        if (services.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:12px;">暂无已启用的 Sub2API 服务，将自动选择第一个</div>';
+        } else {
+            listEl.innerHTML = services.map(s => `
+                <div class="sub2api-service-item" data-id="${s.id}" style="
+                    padding: 10px 14px;
+                    border: 1px solid var(--border);
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: background 0.15s;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                ">
+                    <div>
+                        <div style="font-weight:500;">${escapeHtml(s.name)}</div>
+                        <div style="font-size:0.8rem;color:var(--text-muted);">${escapeHtml(s.api_url)}</div>
+                    </div>
+                    <span class="badge" style="background:var(--primary);color:#fff;font-size:0.7rem;padding:2px 8px;border-radius:10px;">选择</span>
+                </div>
+            `).join('');
+
+            listEl.querySelectorAll('.sub2api-service-item').forEach(item => {
+                item.addEventListener('mouseenter', () => item.style.background = 'var(--surface-hover)');
+                item.addEventListener('mouseleave', () => item.style.background = '');
+                item.addEventListener('click', () => {
+                    cleanup();
+                    resolve({ service_id: parseInt(item.dataset.id) });
+                });
+            });
+        }
+
+        function cleanup() {
+            modal.classList.remove('active');
+            closeBtn.removeEventListener('click', onCancel);
+            cancelBtn.removeEventListener('click', onCancel);
+            autoBtn.removeEventListener('click', onAuto);
+        }
+        function onCancel() { cleanup(); resolve(null); }
+        function onAuto() { cleanup(); resolve({ service_id: null }); }
+
+        closeBtn.addEventListener('click', onCancel);
+        cancelBtn.addEventListener('click', onCancel);
+        autoBtn.addEventListener('click', onAuto);
+    });
+}
+
+// 批量上传到 Sub2API
+async function handleBatchUploadSub2Api() {
+    const count = getEffectiveCount();
+    if (count === 0) return;
+
+    const choice = await selectSub2ApiService();
+    if (choice === null) return;  // 用户取消
+
+    const confirmed = await confirm(`确定要将选中的 ${count} 个账号上传到 Sub2API 吗？`);
+    if (!confirmed) return;
+
+    elements.batchUploadSub2ApiBtn.disabled = true;
+    elements.batchUploadSub2ApiBtn.textContent = '上传中...';
+
+    try {
+        const payload = buildBatchPayload();
+        if (choice.service_id != null) payload.service_id = choice.service_id;
+        const result = await api.post('/accounts/batch-upload-sub2api', payload);
+
+        let message = `成功: ${result.success_count}`;
+        if (result.failed_count > 0) message += `, 失败: ${result.failed_count}`;
+        if (result.skipped_count > 0) message += `, 跳过: ${result.skipped_count}`;
+
+        toast.success(message);
+        loadAccounts();
+    } catch (error) {
+        toast.error('批量上传失败: ' + error.message);
     } finally {
         updateBatchButtons();
     }

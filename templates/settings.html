@@ -38,8 +38,7 @@
             <div class="tabs">
                 <button class="tab-btn active" data-tab="proxy">🌐 代理设置</button>
                 <button class="tab-btn" data-tab="webui">🔒 访问控制</button>
-                <button class="tab-btn" data-tab="cpa">☁️ CPA上传</button>
-                <button class="tab-btn" data-tab="team-manager">🚀 Team Manager</button>
+                <button class="tab-btn" data-tab="upload">☁️ 上传</button>
                 <button class="tab-btn" data-tab="outlook">📮 Outlook配置</button>
                 <button class="tab-btn" data-tab="registration">⚙️ 注册配置</button>
                 <button class="tab-btn" data-tab="email-code">📧 验证码配置</button>
@@ -202,12 +201,12 @@
                 </div>
             </div>
 
-            <!-- CPA 上传设置 -->
-            <div class="tab-content" id="cpa-tab">
+            <!-- 上传服务设置（CPA + Sub2API + Team Manager） -->
+            <div class="tab-content" id="upload-tab">
                 <!-- CPA 服务管理 -->
-                <div class="card">
+                <div class="card" style="margin-top: var(--spacing-lg);">
                     <div class="card-header">
-                        <h3>CPA 服务管理</h3>
+                        <h3>☁️ CPA 服务</h3>
                         <button class="btn btn-primary btn-sm" id="add-cpa-service-btn">+ 添加服务</button>
                     </div>
                     <div class="card-body" style="padding: 0;">
@@ -227,6 +226,110 @@
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Sub2API 服务管理 -->
+                <div class="card" style="margin-top: var(--spacing-lg);">
+                    <div class="card-header">
+                        <h3>🔗 Sub2API 服务</h3>
+                        <button class="btn btn-primary btn-sm" id="add-sub2api-service-btn">+ 添加服务</button>
+                    </div>
+                    <div class="card-body" style="padding: 0;">
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>名称</th>
+                                        <th>API URL</th>
+                                        <th style="width:80px;">状态</th>
+                                        <th style="width:60px;">优先级</th>
+                                        <th style="width:160px;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sub2api-services-table">
+                                    <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:20px;">加载中...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Team Manager 配置 -->
+                <div class="card" style="margin-top: var(--spacing-lg);">
+                    <div class="card-header">
+                        <h3>🚀 Team Manager</h3>
+                        <span class="hint">配置 Team Manager 账号导入功能</span>
+                    </div>
+                    <div class="card-body">
+                        <form id="tm-form">
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="tm-enabled" name="enabled">
+                                    启用 Team Manager 上传
+                                </label>
+                                <p class="hint">启用后可在账号管理页面将账号导入 Team Manager 平台</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="tm-api-url">API URL</label>
+                                <input type="text" id="tm-api-url" name="api_url" placeholder="例如: https://tm.example.com">
+                                <p class="hint">Team Manager 平台的 API 地址</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="tm-api-key">API Key</label>
+                                <input type="password" id="tm-api-key" name="api_key" placeholder="留空则保持原值" autocomplete="new-password">
+                                <p class="hint">Team Manager 平台的认证 Key</p>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">💾 保存设置</button>
+                                <button type="button" class="btn btn-secondary" id="test-tm-btn">🔌 测试连接</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sub2API 服务编辑模态框 -->
+            <div class="modal" id="sub2api-service-edit-modal">
+                <div class="modal-content" style="max-width: 500px;">
+                    <div class="modal-header">
+                        <h3 id="sub2api-service-modal-title">添加 Sub2API 服务</h3>
+                        <button class="modal-close" id="close-sub2api-service-modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="sub2api-service-form">
+                            <input type="hidden" id="sub2api-service-id">
+                            <div class="form-group">
+                                <label for="sub2api-service-name">名称 *</label>
+                                <input type="text" id="sub2api-service-name" placeholder="例如: 主服务" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="sub2api-service-url">API URL *</label>
+                                <input type="text" id="sub2api-service-url" placeholder="http://host" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="sub2api-service-key">API Key</label>
+                                <input type="password" id="sub2api-service-key" placeholder="编辑时留空则保持原值" autocomplete="new-password">
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="sub2api-service-priority">优先级</label>
+                                    <input type="number" id="sub2api-service-priority" value="0" min="0">
+                                    <p class="hint">数字越小优先级越高</p>
+                                </div>
+                                <div class="form-group">
+                                    <label>&nbsp;</label>
+                                    <label style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+                                        <input type="checkbox" id="sub2api-service-enabled" checked> 启用
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">💾 保存</button>
+                                <button type="button" class="btn btn-secondary" id="test-sub2api-service-btn">🔌 测试连接</button>
+                                <button type="button" class="btn btn-secondary" id="cancel-sub2api-service-btn">取消</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -270,44 +373,6 @@
                                 <button type="submit" class="btn btn-primary">💾 保存</button>
                                 <button type="button" class="btn btn-secondary" id="test-cpa-service-btn">🔌 测试连接</button>
                                 <button type="button" class="btn btn-secondary" id="cancel-cpa-service-btn">取消</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Team Manager 设置 -->
-            <div class="tab-content" id="team-manager-tab">
-                <div class="card">
-                    <div class="card-header">
-                        <h3>Team Manager 配置</h3>
-                        <span class="hint">配置 Team Manager 账号导入功能</span>
-                    </div>
-                    <div class="card-body">
-                        <form id="tm-form">
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="tm-enabled" name="enabled">
-                                    启用 Team Manager 上传
-                                </label>
-                                <p class="hint">启用后可在账号管理页面将账号导入 Team Manager 平台</p>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="tm-api-url">API URL</label>
-                                <input type="text" id="tm-api-url" name="api_url" placeholder="例如: https://tm.example.com">
-                                <p class="hint">Team Manager 平台的 API 地址</p>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="tm-api-key">API Key</label>
-                                <input type="password" id="tm-api-key" name="api_key" placeholder="留空则保持原值" autocomplete="new-password">
-                                <p class="hint">Team Manager 平台的认证 Key</p>
-                            </div>
-
-                            <div class="form-actions">
-                                <button type="submit" class="btn btn-primary">💾 保存设置</button>
-                                <button type="button" class="btn btn-secondary" id="test-tm-btn">🔌 测试连接</button>
                             </div>
                         </form>
                     </div>
