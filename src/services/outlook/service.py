@@ -21,6 +21,9 @@ from .providers.imap_new import IMAPNewProvider
 
 logger = logging.getLogger(__name__)
 
+# 验证码搜索的文件夹列表（同时搜索收件箱和垃圾箱）
+_OUTLOOK_SEARCH_FOLDERS = ["INBOX", "Junk Email"]
+
 
 def _get_code_settings() -> dict:
     settings = get_settings()
@@ -157,6 +160,7 @@ class OutlookService(BaseEmailService):
         only_unseen: bool = True,
         since_minutes: Optional[int] = None,
         use_cache: bool = False,
+        folders: Optional[List[str]] = None,
     ) -> List[EmailMessage]:
         """通过 IMAP_NEW Provider 获取邮件，可选使用内存缓存"""
         if use_cache:
@@ -173,7 +177,7 @@ class OutlookService(BaseEmailService):
             with self._imap_semaphore:
                 with provider:
                     emails = provider.get_recent_emails(
-                        count, only_unseen, since_minutes=since_minutes
+                        count, only_unseen, since_minutes=since_minutes, folders=folders
                     )
 
             if emails:
@@ -269,20 +273,21 @@ class OutlookService(BaseEmailService):
         start_time = time.time()
         poll_count = 0
 
-        # 计算 since_minutes：从发送时间前2分钟开始搜索，最多查180分钟
-        since_minutes: Optional[int] = None
-        if otp_sent_at:
-            elapsed_since_send = int((time.time() - otp_sent_at) / 60) + 2
-            since_minutes = min(elapsed_since_send, 180)
-
         while time.time() - start_time < timeout:
             poll_count += 1
-            # 有 since_minutes 时用 SINCE 搜索（覆盖已读/未读），否则前3次用 UNSEEN
-            only_unseen = (since_minutes is None) and (poll_count <= 3)
+            # 每次动态计算 since_minutes，确保时间窗口随轮询推进而更新
+            if otp_sent_at:
+                elapsed_since_send = int((time.time() - otp_sent_at) / 60) + 2
+                since_minutes: Optional[int] = min(elapsed_since_send, 180)
+                only_unseen = False
+            else:
+                since_minutes = None
+                only_unseen = poll_count <= 3
             try:
                 emails = self._fetch_emails(
                     account, count=15, only_unseen=only_unseen,
                     since_minutes=since_minutes,
+                    folders=_OUTLOOK_SEARCH_FOLDERS,
                 )
                 if emails:
                     code = self.email_parser.find_verification_code_in_emails(
@@ -334,7 +339,8 @@ class OutlookService(BaseEmailService):
                 with provider:
                     # 先做一次即时检查
                     emails = provider.get_recent_emails(
-                        15, only_unseen=(since_minutes is None), since_minutes=since_minutes
+                        15, only_unseen=(since_minutes is None), since_minutes=since_minutes,
+                        folders=_OUTLOOK_SEARCH_FOLDERS,
                     )
                     code = self.email_parser.find_verification_code_in_emails(
                         emails,
@@ -361,7 +367,8 @@ class OutlookService(BaseEmailService):
                             # 没有 otp_sent_at 时，用距当前时间2分钟内的邮件
                             fetch_since = 2
                         emails = provider.get_recent_emails(
-                            15, only_unseen=False, since_minutes=fetch_since
+                            15, only_unseen=False, since_minutes=fetch_since,
+                            folders=_OUTLOOK_SEARCH_FOLDERS,
                         )
                         code = self.email_parser.find_verification_code_in_emails(
                             emails,

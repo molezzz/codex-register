@@ -193,56 +193,69 @@ class IMAPNewProvider(OutlookProvider):
         count: int = 20,
         only_unseen: bool = True,
         since_minutes: Optional[int] = None,
+        folders: Optional[List[str]] = None,
     ) -> List[EmailMessage]:
         """
-        获取最近的邮件。
+        获取最近的邮件，支持多文件夹搜索（合并去重）。
 
         搜索策略：
         - since_minutes 指定时：用 SINCE 日期 + ALL 搜索最近N分钟内的邮件（不受已读/未读限制）
         - only_unseen=True 且未指定 since_minutes：搜索 UNSEEN
         - only_unseen=False 且未指定 since_minutes：搜索全部（取最近 count 封）
+        - folders 默认为 ["INBOX"]，可传入多个文件夹（如 ["INBOX", "Junk Email"]）
         """
         if not self._connected:
             if not self.connect():
                 return []
 
-        try:
-            self._conn.select("INBOX", readonly=True)
+        if folders is None:
+            folders = ["INBOX"]
 
-            if since_minutes is not None:
-                # 按时间范围搜索：SINCE 某天（IMAP 只支持按天，精度为天）
-                since_dt = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
-                since_str = since_dt.strftime("%d-%b-%Y")
-                status, data = self._conn.search(None, f"SINCE {since_str}")
-            elif only_unseen:
-                status, data = self._conn.search(None, "UNSEEN")
-            else:
-                status, data = self._conn.search(None, "ALL")
+        all_emails: List[EmailMessage] = []
+        seen_ids: set = set()
 
-            if status != "OK" or not data or not data[0]:
-                return []
+        for folder in folders:
+            try:
+                status, _ = self._conn.select(folder, readonly=True)
+                if status != "OK":
+                    logger.debug(f"[{self.account.email}] 文件夹 {folder} 不存在或无法访问，跳过")
+                    continue
 
-            ids = data[0].split()
-            recent_ids = ids[-count:][::-1]  # 取最新的 count 封，倒序（最新在前）
+                if since_minutes is not None:
+                    since_dt = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
+                    since_str = since_dt.strftime("%d-%b-%Y")
+                    status, data = self._conn.search(None, f"SINCE {since_str}")
+                elif only_unseen:
+                    status, data = self._conn.search(None, "UNSEEN")
+                else:
+                    status, data = self._conn.search(None, "ALL")
 
-            emails = []
-            for msg_id in recent_ids:
-                try:
-                    msg = self._fetch_email(msg_id)
-                    if msg:
-                        emails.append(msg)
-                except Exception as e:
-                    logger.warning(f"[{self.account.email}] 解析邮件失败 (ID: {msg_id}): {e}")
+                if status != "OK" or not data or not data[0]:
+                    continue
 
-            return emails
+                ids = data[0].split()
+                recent_ids = ids[-count:][::-1]  # 取最新的 count 封，倒序（最新在前）
 
-        except Exception as e:
-            self.record_failure(str(e))
-            logger.error(f"[{self.account.email}] 获取邮件失败: {e}")
-            _imap_pool.invalidate(self.account.email)
-            self._connected = False
-            self._conn = None
-            return []
+                for msg_id in recent_ids:
+                    try:
+                        msg = self._fetch_email(msg_id)
+                        if msg and msg.id not in seen_ids:
+                            seen_ids.add(msg.id)
+                            all_emails.append(msg)
+                    except Exception as e:
+                        logger.warning(f"[{self.account.email}] 解析邮件失败 (ID: {msg_id}, folder: {folder}): {e}")
+
+            except Exception as e:
+                self.record_failure(str(e))
+                logger.warning(f"[{self.account.email}] 搜索文件夹 {folder} 失败: {e}")
+                _imap_pool.invalidate(self.account.email)
+                self._connected = False
+                self._conn = None
+                break
+
+        # 按收信时间降序排列，截取 count 封
+        all_emails.sort(key=lambda m: m.received_timestamp, reverse=True)
+        return all_emails[:count]
 
     def _fetch_email(self, msg_id: bytes) -> Optional[EmailMessage]:
         """获取并解析单封邮件"""
